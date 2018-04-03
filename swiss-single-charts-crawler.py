@@ -4,11 +4,13 @@ import urllib.request
 import re
 import csv
 
-base_url = "https://hitparade.ch/showcharttext.asp?week="
+BASE_URL = "https://hitparade.ch/showcharttext.asp?week="
+CRAWL_DELAY_S = 1
+LATEST_WEEK = 2566
 
 
 def fetch_week_dom(week):
-    with urllib.request.urlopen(base_url + str(week)) as response:
+    with urllib.request.urlopen(BASE_URL + str(week)) as response:
         html = response.read()
         return BeautifulSoup(html, "html.parser").prettify()
 
@@ -63,18 +65,19 @@ def parse_entry(entry_string):
     if artist_song_tuple is None:
         artist = ""
         song = ""
-        rejected_artist_song = artist_and_song
+        crawler_rejected = "yes"
     else:
         artist = artist_song_tuple[0]
         song = artist_song_tuple[1]
-        rejected_artist_song = ""
+        crawler_rejected = "no"
     return {'chart_placement': chart_placement,
             'previous_week': prev_week,
             'publisher': publisher,
             'week_in_charts': week_in_charts,
+            'artist_and_song': artist_and_song,
             'artist': artist,
             'song': song,
-            'rejected_artist_and_song': rejected_artist_song}
+            'crawler_rejected': crawler_rejected}
 
 
 def convert_num(num_string):
@@ -98,42 +101,59 @@ def split_artist_and_song(artist_song_string):
         return parts[0].strip(), parts[1].strip()
 
 
-def compose_entry_dict(entry_string, absolute_week):
+def get_inquiry_date_dict(dom):
+    h2s = dom.find("h2")
+    assert len(h2s) == 1
+    datestring = h2s.contents[0].strip()
+    date_parts = datestring.split(".")
+    assert len(date_parts) == 3
+    return {"year": int(date_parts[2]), "month": int(date_parts[1]), "day": int(date_parts[0])}
+
+
+def compose_entry_dict(entry_string, absolute_week, inquiry_date_dict):
     entry_dict = {}
     basic_entry_dict = parse_entry(entry_string)
     entry_dict["absolute_week"] = absolute_week
+    entry_dict["inquiry_year"] = inquiry_date_dict["year"]
+    entry_dict["inquiry_month"] = inquiry_date_dict["month"]
+    entry_dict["inquiry_day"] = inquiry_date_dict["day"]
     entry_dict["chart_placement"] = basic_entry_dict["chart_placement"]
     entry_dict["previous_week"] = basic_entry_dict["previous_week"]
+    entry_dict["artist_and_song"] = basic_entry_dict["artist_and_song"]
     entry_dict["artist"] = basic_entry_dict["artist"]
     entry_dict["song"] = basic_entry_dict["song"]
     entry_dict["publisher"] = basic_entry_dict["publisher"]
     entry_dict["week_in_charts"] = basic_entry_dict["week_in_charts"]
-    entry_dict["rejected_artist_and_song"] = basic_entry_dict["rejected_artist_and_song"]
+    entry_dict["crawler_rejected"] = basic_entry_dict["crawler_rejected"]
     return entry_dict
 
 
-def entries_to_entry_dict(clean_entry_strings, absolute_week):
+def entries_to_entry_dict(clean_entry_strings, absolute_week, inquiry_date_dict):
     entries = []
     for entry_string in clean_entry_strings:
-        entries.append(compose_entry_dict(entry_string, absolute_week))
+        entries.append(compose_entry_dict(entry_string, absolute_week, inquiry_date_dict))
     return entries
 
 
-html_text = dom.prettify()
-b_tags = dom.findAll("b")
-assert len(b_tags) == 1
-start_tag = b_tags[0]
-assert len(start_tag.contents) == 1
-start_tag_contents = str(start_tag.contents[0]).strip()
-assert start_tag_contents == "Singles"
+def do_one_week():
+    b_tags = dom.findAll("b")
+    assert len(b_tags) == 1
+    start_tag = b_tags[0]
+    assert len(start_tag.contents) == 1
+    start_tag_contents = str(start_tag.contents[0]).strip()
+    assert start_tag_contents == "Singles"
 
-collected_tags = collect_tags(start_tag)
-clean_entries = clean_tags(collected_tags)
+    collected_tags = collect_tags(start_tag)
+    clean_entries = clean_tags(collected_tags)
 
-one_week = entries_to_entry_dict(clean_entries, 2566)
+    one_week = entries_to_entry_dict(clean_entries, 2566, get_inquiry_date_dict(dom))
 
-keys = one_week[0].keys()
-with open('test.csv', 'w', encoding="utf-8") as output_file:
-    dict_writer = csv.DictWriter(output_file, keys, delimiter=',', lineterminator='\n')
-    dict_writer.writeheader()
-    dict_writer.writerows(one_week)
+    keys = one_week[0].keys()
+    with open('test.csv', 'w', encoding="utf-8") as output_file:
+        dict_writer = csv.DictWriter(output_file, keys, delimiter=',', lineterminator='\n')
+        dict_writer.writeheader()
+        dict_writer.writerows(one_week)
+
+
+do_one_week()
+
