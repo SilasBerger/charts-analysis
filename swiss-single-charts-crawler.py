@@ -1,25 +1,27 @@
 from bs4 import BeautifulSoup
 from bs4 import NavigableString
+from time import sleep
 import urllib.request
 import re
 import csv
 
 BASE_URL = "https://hitparade.ch/showcharttext.asp?week="
 CRAWL_DELAY_S = 1
-LATEST_WEEK = 2566
 
 
 def fetch_week_dom(week):
     with urllib.request.urlopen(BASE_URL + str(week)) as response:
         html = response.read()
-        return BeautifulSoup(html, "html.parser").prettify()
+        return BeautifulSoup(html, "html.parser")
 
 
-with open("week2566.html", "r", encoding="utf-8") as demofile:
-    dom = BeautifulSoup(demofile, "html.parser")
+# with open("week2566.html", "r", encoding="utf-8") as demofile:
+#    dom = BeautifulSoup(demofile, "html.parser")
 
 
-def collect_tags(tag, collected_tags=[], br_counter=0):
+def collect_tags(tag, collected_tags=None, br_counter=0):
+    if collected_tags is None:
+        collected_tags = []
     next_tag = tag.next_sibling
     collected_tags.append(next_tag)
     if str(next_tag) == "<br/>":
@@ -135,7 +137,7 @@ def entries_to_entry_dict(clean_entry_strings, absolute_week, inquiry_date_dict)
     return entries
 
 
-def do_one_week():
+def append_one_week(dom, absolute_week, entries):
     b_tags = dom.findAll("b")
     assert len(b_tags) == 1
     start_tag = b_tags[0]
@@ -146,14 +148,33 @@ def do_one_week():
     collected_tags = collect_tags(start_tag)
     clean_entries = clean_tags(collected_tags)
 
-    one_week = entries_to_entry_dict(clean_entries, 2566, get_inquiry_date_dict(dom))
+    one_week = entries_to_entry_dict(clean_entries, absolute_week, get_inquiry_date_dict(dom))
+    for entry in one_week:
+        entries.append(entry)
 
-    keys = one_week[0].keys()
-    with open('test.csv', 'w', encoding="utf-8") as output_file:
+
+def write_to_file(entries, filename):
+    with open(filename, 'w', encoding="utf-8") as output_file:
+        keys = entries[0].keys()
         dict_writer = csv.DictWriter(output_file, keys, delimiter=',', lineterminator='\n')
         dict_writer.writeheader()
-        dict_writer.writerows(one_week)
+        dict_writer.writerows(entries)
 
 
-do_one_week()
+def bulk_download(start_week, end_week, out_filename, temp_filename=None, temp_out_frequency=0):
+    entries = []
+    for absolute_week in range(start_week, end_week + 1):
+        print("Crawling week {}".format(absolute_week))
+        dom = fetch_week_dom(absolute_week)
+        append_one_week(dom, absolute_week, entries)
+        if temp_out_frequency != 0 and out_filename is not None and absolute_week % temp_out_frequency == 0:
+            write_to_file(entries, (temp_filename + "_weeks_{}-{}.csv".format(start_week, absolute_week)))
+        sleep(CRAWL_DELAY_S)
+    write_to_file(entries, (out_filename + "_weeks_{}-{}.csv".format(start_week, end_week)))
 
+
+# --- Breaking week --- #
+# dom = fetch_week_dom(2044)
+# append_one_week(dom, 2044, [])
+
+print("done")
