@@ -213,6 +213,8 @@ def write_to_file(entries, filename, append=True):
         dict_writer.writerows(entries)
 
 
+# note: will append to existing file if parameter is set, but won't check for duplicates. append parameter only
+# applies to final output file - temporary files are always overwritten
 def bulk_download(start_week, end_week, out_filename, temp_filename=None, temp_out_frequency=0, append=True):
     entries = []
     for absolute_week in range(start_week, end_week + 1):
@@ -222,8 +224,8 @@ def bulk_download(start_week, end_week, out_filename, temp_filename=None, temp_o
         if temp_out_frequency != 0 and out_filename is not None and absolute_week % temp_out_frequency == 0:
             write_to_file(entries, (temp_filename + "_weeks_{}-{}.csv".format(start_week, absolute_week)), append=False)
         sleep(CRAWL_DELAY_S)
-    write_to_file(entries, (out_filename + ".csv"), append=True)
+    write_to_file(entries, (out_filename + ".csv"), append=append)
 
 
-# bulk_download(1, 2566, "swiss_single_charts", "partial_swiss_single_charts", 200, append=True)
-bulk_download(2560, 2566, "last_test", append=True)
+bulk_download(1, 2566, "swiss_single_charts", "partial_swiss_single_charts", 200, append=True)
+
