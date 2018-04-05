@@ -15,10 +15,6 @@ def fetch_week_dom(week):
         return BeautifulSoup(html, "html.parser")
 
 
-# with open("week2566.html", "r", encoding="utf-8") as demofile:
-#    dom = BeautifulSoup(demofile, "html.parser")
-
-
 def collect_tags(tag, collected_tags=None, br_counter=0):
     if collected_tags is None:
         collected_tags = []
